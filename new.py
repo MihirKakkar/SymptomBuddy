@@ -1,9 +1,47 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+
 #Creating GUI with tkinter
+import json
 import tkinter
 from tkinter import *
-from keras.models import load_model
+from tensorflow.keras.models import load_model, model_from_json
+import io
+import os
+import pandas as pd
+import numpy as np
 
-model = load_model('diagnosis_model.h5')
+symptoms_url = "https://raw.githubusercontent.com/KellieChong/MacHacks2021/main/symptoms_diseases_data/sym_t.csv"
+diagnosis_url = "https://raw.githubusercontent.com/KellieChong/MacHacks2021/main/symptoms_diseases_data/dia_t.csv"
+symptomsdf = pd.read_csv(symptoms_url)
+diagnosisdf = pd.read_csv(diagnosis_url)
+
+# symptomsdf = symptomsdf.tonumpy()
+# diagnosisdf = diagnosisdf.tonumpy()
+#not really sure if we need to load these
+f = open("/Users/kelliechong/documents/MacHacks/model.json",)
+json_model = json.loads(f.read())
+
+model = load_model('/Users/kelliechong/documents/MacHacks/diagnosis_model_updated.h5')
+model.load_weights('/Users/kelliechong/documents/MacHacks/diagnosis_model_updated.h5')
+
+symptomsdf = pd.DataFrame(symptomsdf).to_numpy()
+diagnosisdf = pd.DataFrame(diagnosisdf).to_numpy()
+rows = len(symptomsdf)
+
+symptoms_words = []#np.empty(rows,)
+
+
+i=0
+
+for i in range(0,int(rows)):
+          description = str(symptomsdf[i]).lower().split() #row i, column 1
+          description = [s.replace('(', '') for s in description]
+          description = [s.replace(')', '') for s in description]
+          symptoms_words.append(description)
+          i += 1
+symptoms_words = np.asarray(symptoms_words)
 
 def clean_up_sentence(sentence):
     sentence_words = nltk.word_tokenize(sentence)
@@ -25,6 +63,7 @@ def bow(sentence, words, show_details=True):
                 if show_details:
                     print ("found in bag: %s" % w)
     return(np.array(bag))
+
 
 def predict_class(sentence, model):
     # filter out predictions below a threshold
@@ -48,12 +87,28 @@ def getResponse(ints, intents_json):
             break
     return result
 
+def response2symptoms(result):
+    threshold = 0.6
+    result = lower(result).split()
+    compare = np.zeros(rows,)
+    j = 0
+    for j in range(len(compare)):
+        compare[j] = {x for x in result for y in symptoms_words[j] if similar(x, y) > threshold}
+        j += 1
+    symptom = np.where(RSS == np.amax(compare))
+    return symptom
+    
+def diagnosis(symptom):
+    dia = model.predict(symptom,random.randint(0,4))
+    diagnosis_text = diagnosisdf[dia][2]
+    return diagnosis_text
+    
 def chatbot_response(msg):
-    ints = predict_class(msg, model)
-    res = getResponse(ints, intents)
+    #ints = predict_class(msg, model)
+    res = diagnosis
     #fitting and saving the model
-    model_result = model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=1)
-    model.save('diagnosis_model.h5', model_result)
+    #model_result = model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=1)
+    #model.save('diagnosis_model.h5', model_result)
 
     return res
 
@@ -90,7 +145,7 @@ ChatLog['yscrollcommand'] = scrollbar.set
 #Create Button to send message
 SendButton = Button(base, font=("Verdana",12,'bold'), text="Send", width="12", height=5,
                     bd=0, bg="#32de97", activebackground="#000000",fg='#ffffff',
-                    command= send )
+                    command= send)
 
 #Create the box to enter message
 EntryBox = Text(base, bd=0, bg="white",width="29", height="5", font="Arial")
